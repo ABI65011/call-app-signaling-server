@@ -2,7 +2,7 @@
 // signaling flow, to verify the server correctly relays every event.
 const { io } = require("socket.io-client");
 
-const SERVER_URL = "http://localhost:3000";
+const SERVER_URL = "https://call-app-signaling-server.onrender.com";
 
 function log(who, msg, data) {
   console.log(`[${who}] ${msg}`, data !== undefined ? data : "");
