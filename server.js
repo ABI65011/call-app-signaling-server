@@ -35,8 +35,14 @@ const io = new Server(server, {
 const connectedUsers = {};
 
 function broadcastUserList() {
-  const usernames = Object.values(connectedUsers);
-  io.emit("user-list", usernames);
+  // Send both socketId and username for each connected user, since callers
+  // need the target's socketId to send a call-request - a username alone
+  // isn't enough to address anyone.
+  const users = Object.entries(connectedUsers).map(([socketId, username]) => ({
+    socketId,
+    username,
+  }));
+  io.emit("user-list", users);
 }
 
 io.on("connection", (socket) => {
