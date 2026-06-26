@@ -37,6 +37,7 @@ callee.on("connect", () => {
 
 callee.on("user-list", (users) => {
   log("CALLEE", "user-list updated:", users);
+  // users is now [{ socketId, username }, ...] instead of plain strings.
   // Once both are registered, caller initiates a call to callee.
   if (users.length === 2 && !testPassed.registered) {
     testPassed.registered = true;
