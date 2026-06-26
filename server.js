@@ -9,6 +9,17 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const { OAuth2Client } = require("google-auth-library");
+const { findOrCreateUser } = require("./db.js");
+
+// This must match the WEB client ID created in Google Cloud Console -
+// the same one baked into the Android app's strings.xml as
+// default_web_client_id. Google's verifyIdToken call below checks that
+// the token was issued for this specific client.
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_WEB_CLIENT_ID ||
+  "934658890192-rrbcj7huotb83d2glfqr0svcou720vur.apps.googleusercontent.com";
+
+const googleClient = new OAuth2Client(GOOGLE_WEB_CLIENT_ID);
 
 const app = express();
 app.use(cors());
@@ -49,11 +60,34 @@ io.on("connection", (socket) => {
   console.log(`[connect] socket ${socket.id} connected`);
 
   // --- Registration ---
-  // Client sends their chosen display name right after connecting.
-  socket.on("register", (username) => {
-    connectedUsers[socket.id] = username;
-    console.log(`[register] ${username} (${socket.id})`);
-    broadcastUserList();
+  // Client sends a Google ID token (not a plain username) right after
+  // connecting. We verify it really came from Google before trusting
+  // any identity, then look up/create the user in SQLite.
+  socket.on("register", async (idToken) => {
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: GOOGLE_WEB_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+
+      if (!payload || !payload.sub) {
+        throw new Error("Token payload missing required fields");
+      }
+
+      const user = findOrCreateUser({
+        googleSub: payload.sub,
+        email: payload.email || "unknown",
+        displayName: payload.name || payload.email || "Unknown",
+      });
+
+      connectedUsers[socket.id] = user.display_name;
+      console.log(`[register] verified ${user.display_name} <${user.email}> (${socket.id})`);
+      broadcastUserList();
+    } catch (err) {
+      console.error(`[register] token verification failed: ${err.message}`);
+      socket.emit("register-failed", { reason: "Invalid or expired sign-in. Please sign in again." });
+    }
   });
 
   // --- Call request ---
